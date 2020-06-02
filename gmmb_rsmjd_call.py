@@ -104,7 +104,7 @@ print('s(10) = %.16f' % s(15)) # 0.8672053048004046
 
 
 # %%
-# def rsmjd_gmmb_mc(S0, G, T, r, sigma, m, me, lamb, mu, nu, A, Pi, M, I):
+# def rsmjd_gmmb_mc(S0, G, T, r, sigma, m, me, lamb, mu, nu, A, Pi, I):
 #     r1, r2 = r[0], r[1]
 #     sigma1, sigma2 = sigma[0], sigma[1]
 #     l1, l2 = A[0, 1], A[1, 0]
@@ -163,7 +163,7 @@ print('s(10) = %.16f' % s(15)) # 0.8672053048004046
 #     return (np.mean(cf[-1]), Gmmb)
 
 # start = time.clock()
-# Results = rsmjd_gmmb_mc(S0, G, T, r, sigma, m, me, lamb, mu, nu, A, Pi, M, I)
+# Results = rsmjd_gmmb_mc(S0, G, T, r, sigma, m, me, lamb, mu, nu, A, Pi, I)
 # print('Put_MC = %.16f' % Results[0]) # 15.8974221895861056
 # print('GMMB_MC = %.16f' % Results[1]) # 0.0358920927391137
 # elapsed = (time.clock() - start)
@@ -210,6 +210,48 @@ def rsmjd_put_fst(S0, G, T, r, sigma, m, lamb, mu, nu, A, Pi, N, X):
     P = Pi.T.dot(np.array([[f1(S0)], [f2(S0)]]))
     return float(P) # 15.8587171702497667
 print('Put_FST = %.16f' % rsmjd_put_fst(S0, G, T, r, sigma, m, lamb, mu, nu, A, Pi, N, X))
+
+
+# %%
+def rsmjd_call_fst(S0, G, T, r, sigma, m, lamb, mu, nu, A, Pi, N, X):
+    # parameter
+    r1, r2 = r[0], r[1]
+    sigma1, sigma2 = sigma[0], sigma[1]
+    A11, A12, A21, A22 = A[0, 0], A[0, 1], A[1, 0], A[1, 1]
+    mu1, mu2 = mu[0], mu[1]
+    nu1, nu2 = nu[0], nu[1]
+    lamb1, lamb2 = lamb[0], lamb[1]
+    # Real space
+    x_min, x_max = -X, X
+    dx = (x_max - x_min) / (N - 1)
+    x = np.linspace(x_min, x_max, N)
+    # Fourier space
+    epsilon = 0.0001
+    w_max = np.pi / dx
+    dw = 2 * w_max / N
+    w = np.hstack((np.arange(0, w_max + epsilon, dw), np.arange(-w_max + dw, -dw + epsilon, dw)))
+    # Payoff function at time T
+    ST = S0 * np.exp(x)
+    payoff_c = np.maximum(ST - G, 0)
+    # Matrix characteristic funciton
+    drift1 = r1 - m - lamb1 * (np.exp(mu1 + 0.5 * nu1 ** 2) - 1) - 0.5 * sigma1 ** 2
+    drift2 = r2 - m - lamb2 * (np.exp(mu2 + 0.5 * nu2 ** 2) - 1) - 0.5 * sigma2 ** 2  
+    psi1 = 1j * drift1 * w - 0.5 * (sigma1 * w) ** 2 + lamb1 * (np.exp(1j * mu1 * w - 0.5 * (nu1 * w) ** 2) - 1) - r1
+    psi2 = 1j * drift2 * w - 0.5 * (sigma2 * w) ** 2 + lamb2 * (np.exp(1j * mu2 * w - 0.5 * (nu2 * w) ** 2) - 1) - r2
+    Psi = np.zeros((N, 2, 2), dtype=complex)
+    for i in range(N):
+        Psi[i, 0] = [A11 + psi1[i], A12]
+        Psi[i, 1] = [A21, A22 + psi2[i]]
+    char = np.array([expm(i * T) for i in Psi])
+    # FST method
+    c1 = ifft((char[:, 0, 0] + char[:, 0, 1]) * fft(payoff_c)).real
+    c2 = ifft((char[:, 1, 0] + char[:, 1, 1]) * fft(payoff_c)).real
+    # Interpolate prices
+    f1 = interpolate.PchipInterpolator(ST, c1)
+    f2 = interpolate.PchipInterpolator(ST, c2)
+    C = Pi.T.dot(np.array([[f1(S0)], [f2(S0)]]))
+    return float(C) # 15.8587171702497667
+print('Call_FST = %.16f' % rsmjd_call_fst(S0, G, T, r, sigma, m, lamb, mu, nu, A, Pi, N, X))
 
 
 # %%
@@ -351,6 +393,48 @@ print('Delta_Put = %.16f' % rsmjd_putdelta_fst(S0, G, T, r, sigma, m, lamb, mu, 
 
 
 # %%
+def rsmjd_calldelta_fst(S0, G, T, r, sigma, m, lamb, mu, nu, A, Pi, N, X):
+    # parameter
+    r1, r2 = r[0], r[1]
+    sigma1, sigma2 = sigma[0], sigma[1]
+    A11, A12, A21, A22 = A[0, 0], A[0, 1], A[1, 0], A[1, 1]
+    mu1, mu2 = mu[0], mu[1]
+    nu1, nu2 = nu[0], nu[1]
+    lamb1, lamb2 = lamb[0], lamb[1]
+    # Real space
+    x_min, x_max = -X, X
+    dx = (x_max - x_min) / (N - 1)
+    x = np.linspace(x_min, x_max, N)
+    # Fourier space
+    epsilon = 0.0001
+    w_max = np.pi / dx
+    dw = 2 * w_max / N
+    w = np.hstack((np.arange(0, w_max + epsilon, dw), np.arange(-w_max + dw, -dw + epsilon, dw)))
+    # Payoff function at time T
+    ST = S0 * np.exp(x)
+    payoff_c = np.maximum(ST - G, 0)
+    # Matrix characteristic funciton
+    drift1 = r1 - m - lamb1 * (np.exp(mu1 + 0.5 * nu1 ** 2) - 1) - 0.5 * sigma1 ** 2
+    drift2 = r2 - m - lamb2 * (np.exp(mu2 + 0.5 * nu2 ** 2) - 1) - 0.5 * sigma2 ** 2  
+    psi1 = 1j * drift1 * w - 0.5 * (sigma1 * w) ** 2 + lamb1 * (np.exp(1j * mu1 * w - 0.5 * (nu1 * w) ** 2) - 1) - r1
+    psi2 = 1j * drift2 * w - 0.5 * (sigma2 * w) ** 2 + lamb2 * (np.exp(1j * mu2 * w - 0.5 * (nu2 * w) ** 2) - 1) - r2
+    Psi = np.zeros((N, 2, 2), dtype=complex)
+    for i in range(N):
+        Psi[i, 0] = [A11 + psi1[i], A12]
+        Psi[i, 1] = [A21, A22 + psi2[i]]
+    char = np.array([expm(i * T) for i in Psi])
+    # FST method
+    delta_c1 = (ifft(1j * w * (char[:, 0, 0] + char[:, 0, 1]) * fft(payoff_c)) / (ST)).real
+    delta_c2 = (ifft(1j * w * (char[:, 1, 0] + char[:, 1, 1]) * fft(payoff_c)) / (ST)).real
+    # Interpolate prices
+    f1 = interpolate.PchipInterpolator(ST, delta_c1)
+    f2 = interpolate.PchipInterpolator(ST, delta_c2)
+    Delta_C = Pi.T.dot(np.array([[f1(S0)], [f2(S0)]]))
+    return float(Delta_C) # -0.2892064937563866
+print('Delta_Call = %.16f' % rsmjd_calldelta_fst(S0, G, T, r, sigma, m, lamb, mu, nu, A, Pi, N, X))
+
+
+# %%
 def rsmjd_gmmbdelta_fst(S0, G, T, r, sigma, m, me, lamb, mu, nu, A, Pi, N, X):
     Delta_P = rsmjd_putdelta_fst(S0, G, T, r, sigma, m, lamb, mu, nu, A, Pi, N, X)
     # parameter
@@ -462,6 +546,52 @@ def rsmjd_putgamma_fst(S0, G, T, r, sigma, m, lamb, mu, nu, A, Pi, N, X):
     Gamma_P = Pi.T.dot(np.array([[f1(S0)], [f2(S0)]]))
     return float(Gamma_P) # 0.0055049515372804
 print('Gamma_Put = %.16f' % rsmjd_putgamma_fst(S0, G, T, r, sigma, m, lamb, mu, nu, A, Pi, N, X))
+
+
+# %%
+def rsmjd_callgamma_fst(S0, G, T, r, sigma, m, lamb, mu, nu, A, Pi, N, X):
+    # parameter
+    r1, r2 = r[0], r[1]
+    sigma1, sigma2 = sigma[0], sigma[1]
+    A11, A12, A21, A22 = A[0, 0], A[0, 1], A[1, 0], A[1, 1]
+    mu1, mu2 = mu[0], mu[1]
+    nu1, nu2 = nu[0], nu[1]
+    lamb1, lamb2 = lamb[0], lamb[1]
+    # Real space
+    x_min, x_max = -X, X
+    dx = (x_max - x_min) / (N - 1)
+    x = np.linspace(x_min, x_max, N)
+    # Real space
+    x_min, x_max = -X, X
+    dx = (x_max - x_min) / (N - 1)
+    x = np.linspace(x_min, x_max, N)
+    # Fourier space
+    epsilon = 0.0001
+    w_max = np.pi / dx
+    dw = 2 * w_max / N
+    w = np.hstack((np.arange(0, w_max + epsilon, dw), np.arange(-w_max + dw, -dw + epsilon, dw)))
+    # Payoff function at time T
+    ST = S0 * np.exp(x)
+    payoff_c = np.maximum(ST - G, 0)
+    # Matrix characteristic funciton
+    drift1 = r1 - m - lamb1 * (np.exp(mu1 + 0.5 * nu1 ** 2) - 1) - 0.5 * sigma1 ** 2
+    drift2 = r2 - m - lamb2 * (np.exp(mu2 + 0.5 * nu2 ** 2) - 1) - 0.5 * sigma2 ** 2  
+    psi1 = 1j * drift1 * w - 0.5 * (sigma1 * w) ** 2 + lamb1 * (np.exp(1j * mu1 * w - 0.5 * (nu1 * w) ** 2) - 1) - r1
+    psi2 = 1j * drift2 * w - 0.5 * (sigma2 * w) ** 2 + lamb2 * (np.exp(1j * mu2 * w - 0.5 * (nu2 * w) ** 2) - 1) - r2
+    Psi = np.zeros((N, 2, 2), dtype=complex)
+    for i in range(N):
+        Psi[i, 0] = [A11 + psi1[i], A12]
+        Psi[i, 1] = [A21, A22 + psi2[i]]
+    char = np.array([expm(i * T) for i in Psi])
+    # FST method
+    gamma_c1 = (ifft(-(1j * w + w ** 2) * (char[:, 0, 0] + char[:, 0, 1]) * fft(payoff_c)) / (ST ** 2)).real
+    gamma_c2 = (ifft(-(1j * w + w ** 2) * (char[:, 1, 0] + char[:, 1, 1]) * fft(payoff_c)) / (ST ** 2)).real
+    # Interpolate prices
+    f1 = interpolate.PchipInterpolator(ST, gamma_c1)
+    f2 = interpolate.PchipInterpolator(ST, gamma_c2)
+    Gamma_C = Pi.T.dot(np.array([[f1(S0)], [f2(S0)]]))
+    return float(Gamma_C) # 0.0055049515372804
+print('Gamma_Call = %.16f' % rsmjd_callgamma_fst(S0, G, T, r, sigma, m, lamb, mu, nu, A, Pi, N, X))
 
 
 # %%
@@ -582,6 +712,57 @@ def rsmjd_putrho_fst(S0, G, T, r, sigma, m, lamb, mu, nu, A, Pi, N, X):
 Results = rsmjd_putrho_fst(S0, G, T, r, sigma, m, lamb, mu, nu, A, Pi, N, X)
 print('Rho1_Put = %.16f' % Results[0]) # -4.4371758355264328
 print('Rho2_Put = %.16f' % Results[1]) # -0.0004939428560587
+
+
+# %%
+def rsmjd_callrho_fst(S0, G, T, r, sigma, m, lamb, mu, nu, A, Pi, N, X):
+    # parameter
+    r1, r2 = r[0], r[1]
+    sigma1, sigma2 = sigma[0], sigma[1]
+    A11, A12, A21, A22 = A[0, 0], A[0, 1], A[1, 0], A[1, 1]
+    mu1, mu2 = mu[0], mu[1]
+    nu1, nu2 = nu[0], nu[1]
+    lamb1, lamb2 = lamb[0], lamb[1]
+    # Real space
+    x_min, x_max = -X, X
+    dx = (x_max - x_min) / (N - 1)
+    x = np.linspace(x_min, x_max, N)
+    # Fourier space
+    epsilon = 0.0001
+    w_max = np.pi / dx
+    dw = 2 * w_max / N
+    w = np.hstack((np.arange(0, w_max + epsilon, dw), np.arange(-w_max + dw, -dw + epsilon, dw)))
+    # Payoff function at time T
+    ST = S0 * np.exp(x)
+    payoff_c = np.maximum(ST - G, 0)
+    # Matrix characteristic funciton
+    drift1 = r1 - m - lamb1 * (np.exp(mu1 + 0.5 * nu1 ** 2) - 1) - 0.5 * sigma1 ** 2
+    drift2 = r2 - m - lamb2 * (np.exp(mu2 + 0.5 * nu2 ** 2) - 1) - 0.5 * sigma2 ** 2  
+    psi1 = 1j * drift1 * w - 0.5 * (sigma1 * w) ** 2 + lamb1 * (np.exp(1j * mu1 * w - 0.5 * (nu1 * w) ** 2) - 1) - r1
+    psi2 = 1j * drift2 * w - 0.5 * (sigma2 * w) ** 2 + lamb2 * (np.exp(1j * mu2 * w - 0.5 * (nu2 * w) ** 2) - 1) - r2
+    Psi = np.zeros((N, 2, 2), dtype=complex)
+    for i in range(N):
+        Psi[i, 0] = [A11 + psi1[i], A12]
+        Psi[i, 1] = [A21, A22 + psi2[i]]
+    char = np.array([expm(i * T) for i in Psi])
+    # FST method for rho 1
+    rho1_c1 = ifft((1j * w - 1) * T * (char[:, 0, 0] + char[:, 0, 1]) * fft(payoff_c)).real
+    rho1_c2 = ifft(0 * fft(payoff_c)).real
+    # Interpolate prices
+    f1 = interpolate.PchipInterpolator(ST, rho1_c1)
+    f2 = interpolate.PchipInterpolator(ST, rho1_c2)
+    Rho1_C = Pi.T.dot(np.array([[f1(S0)], [f2(S0)]])) / 100
+    # FST method for rho 2
+    rho2_c1 = ifft(0 * fft(payoff_c)).real
+    rho2_c2 = ifft((1j * w - 1) * T * (char[:, 1, 0] + char[:, 1, 1]) * fft(payoff_c)).real
+    # Interpolate prices
+    f1 = interpolate.PchipInterpolator(ST, rho2_c1)
+    f2 = interpolate.PchipInterpolator(ST, rho2_c2)
+    Rho2_C = Pi.T.dot(np.array([[f1(S0)], [f2(S0)]])) / 100
+    return (float(Rho1_C), float(Rho2_C))
+Results = rsmjd_callrho_fst(S0, G, T, r, sigma, m, lamb, mu, nu, A, Pi, N, X)
+print('Rho1_Call = %.16f' % Results[0]) # -4.4371758355264328
+print('Rho2_Call = %.16f' % Results[1]) # -0.0004939428560587
 
 
 # %%
@@ -716,6 +897,57 @@ def rsmjd_putvega_fst(S0, G, T, r, sigma, m, lamb, mu, nu, A, Pi, N, X):
 Results = rsmjd_putvega_fst(S0, G, T, r, sigma, m, lamb, mu, nu, A, Pi, N, X) 
 print('Vega1_Put = %.16f' % Results[0]) # 0.5504435468784196
 print('Vega2_Put = %.16f' % Results[1]) # 0.0001043104931637
+
+
+# %%
+def rsmjd_callvega_fst(S0, G, T, r, sigma, m, lamb, mu, nu, A, Pi, N, X):
+    # parameter
+    r1, r2 = r[0], r[1]
+    sigma1, sigma2 = sigma[0], sigma[1]
+    A11, A12, A21, A22 = A[0, 0], A[0, 1], A[1, 0], A[1, 1]
+    mu1, mu2 = mu[0], mu[1]
+    nu1, nu2 = nu[0], nu[1]
+    lamb1, lamb2 = lamb[0], lamb[1]
+    # Real space
+    x_min, x_max = -X, X
+    dx = (x_max - x_min) / (N - 1)
+    x = np.linspace(x_min, x_max, N)
+    # Fourier space
+    epsilon = 0.0001
+    w_max = np.pi / dx
+    dw = 2 * w_max / N
+    w = np.hstack((np.arange(0, w_max + epsilon, dw), np.arange(-w_max + dw, -dw + epsilon, dw)))
+    # Payoff function at time T
+    ST = S0 * np.exp(x)
+    payoff_c = np.maximum(ST - G, 0)
+    # Matrix characteristic funciton
+    drift1 = r1 - m - lamb1 * (np.exp(mu1 + 0.5 * nu1 ** 2) - 1) - 0.5 * sigma1 ** 2
+    drift2 = r2 - m - lamb2 * (np.exp(mu2 + 0.5 * nu2 ** 2) - 1) - 0.5 * sigma2 ** 2  
+    psi1 = 1j * drift1 * w - 0.5 * (sigma1 * w) ** 2 + lamb1 * (np.exp(1j * mu1 * w - 0.5 * (nu1 * w) ** 2) - 1) - r1
+    psi2 = 1j * drift2 * w - 0.5 * (sigma2 * w) ** 2 + lamb2 * (np.exp(1j * mu2 * w - 0.5 * (nu2 * w) ** 2) - 1) - r2
+    Psi = np.zeros((N, 2, 2), dtype=complex)
+    for i in range(N):
+        Psi[i, 0] = [A11 + psi1[i], A12]
+        Psi[i, 1] = [A21, A22 + psi2[i]]
+    char = np.array([expm(i * T) for i in Psi])
+    # FST method for sigma 1
+    vega1_c1 = ifft(-(1j * w + w ** 2) * sigma1 * T * (char[:, 0, 0] + char[:, 0, 1]) * fft(payoff_c)).real
+    vega1_c2 = ifft(0 * fft(payoff_c)).real
+    # Interpolate prices
+    f1 = interpolate.PchipInterpolator(ST, vega1_c1)
+    f2 = interpolate.PchipInterpolator(ST, vega1_c2)
+    Vega1_C = Pi.T.dot(np.array([[f1(S0)], [f2(S0)]])) / 100
+    # FST method for sigma 2
+    vega2_c1 = ifft(0 * fft(payoff_c)).real
+    vega2_c2 = ifft(-(1j * w + w ** 2) * sigma2 * T * (char[:, 1, 0] + char[:, 1, 1]) * fft(payoff_c)).real
+    # Interpolate prices
+    f1 = interpolate.PchipInterpolator(ST, vega2_c1)
+    f2 = interpolate.PchipInterpolator(ST, vega2_c2)
+    Vega2_C = Pi.T.dot(np.array([[f1(S0)], [f2(S0)]])) / 100
+    return (float(Vega1_C), float(Vega2_C))
+Results = rsmjd_callvega_fst(S0, G, T, r, sigma, m, lamb, mu, nu, A, Pi, N, X) 
+print('Vega1_Call = %.16f' % Results[0]) # 0.5504435468784196
+print('Vega2_Call = %.16f' % Results[1]) # 0.0001043104931637
 
 
 # %%
@@ -1329,15 +1561,15 @@ Stock.shape
 
 
 # %%
-for j in range(T+1):
-    Unhedged = []
-    for i in Stock[j]:
-        temp = rsmjd_gmmb_fst(i, G, T-j, r, sigma, m, me, lamb, mu, nu, A, Pi, N, X)
-        Unhedged.append(temp)
-    print(j, np.mean(Unhedged), np.std(Unhedged))
+# for j in range(T+1):
+#     Unhedged = []
+#     for i in Stock[j]:
+#         temp = rsmjd_gmmb_fst(i, G, T-j, r, sigma, m, me, lamb, mu, nu, A, Pi, N, X)
+#         Unhedged.append(temp)
+#     print(j, np.mean(Unhedged), np.std(Unhedged))
 
 # %% [markdown]
-# ## Static hedging
+# ## Static hedging by put options
 
 # %%
 # def portfolio_put(S, G, t, r, sigma, m, me, lamb, mu, nu, A, Pi, N, X):
@@ -1374,15 +1606,15 @@ for j in range(T+1):
 
 
 # %%
-def pv(S, t): # Present Value
-    vector = np.zeros(8)
-    vector[0] = rsmjd_gmmb_fst(S, G, t, r, sigma, m, me, lamb, mu, nu, A, Pi, N, X)
-    for j in range(3): # Put(10), Put(11), Put(12)
-        vector[j+1] = rsmjd_put_fst(S, G, t+j, r, sigma, 0, lamb, mu, nu, A, Pi, N, X)
-    for j in range(2): # f(15), f(16), Z(15), Z(16)
-        vector[j+4] = s(10+j) * z(r, t+j, A, Pi)
-        vector[j+6] = z(r, t+j, A, Pi)
-    return vector
+# def pv(S, t): # Present Value
+#     vector = np.zeros(8)
+#     vector[0] = rsmjd_gmmb_fst(S, G, t, r, sigma, m, me, lamb, mu, nu, A, Pi, N, X)
+#     for j in range(3): # Put(10), Put(11), Put(12)
+#         vector[j+1] = rsmjd_put_fst(S, G, t+j, r, sigma, 0, lamb, mu, nu, A, Pi, N, X)
+#     for j in range(2): # f(15), f(16), Z(15), Z(16)
+#         vector[j+4] = s(10+j) * z(r, t+j, A, Pi)
+#         vector[j+6] = z(r, t+j, A, Pi)
+#     return vector
 
 
 # %%
@@ -1411,9 +1643,115 @@ def pv(S, t): # Present Value
 
 
 # %%
-W_lin = np.array([-1, -234.951128, 510.785870, -274.900887, -8.38397657, 19.1901548, -1153.04965, 1147.96998])
-W_opt = np.array([-1, -2.25472959, 0.19034841, 3.18033945, -8.38398898, 19.19016453, -13.44092331, -12.93929325])
-W_reg = np.array([-1, -0.567600623, -0.0105275915, 0, -4.11664166, 15.8527835, 0, 0])
+# W_lin = np.array([-1, -234.951128, 510.785870, -274.900887, -8.38397657, 19.1901548, -1153.04965, 1147.96998])
+# W_opt = np.array([-1, -2.25472959, 0.19034841, 3.18033945, -8.38398898, 19.19016453, -13.44092331, -12.93929325])
+# W_reg = np.array([-1, -0.567600623, -0.0105275915, 0, -4.11664166, 15.8527835, 0, 0])
+
+
+# %%
+# for t in range(T+1):
+#     Static = []
+#     for i in Stock[t]:
+#         pvt = pv(i, T-t)
+#         Static.append(pvt.dot(W_lin))
+#     print(t, np.mean(Static), np.std(Static))
+
+
+# %%
+# for t in range(T+1):
+#     Static = []
+#     for i in Stock[t]:
+#         pvt = pv(i, T-t)
+#         Static.append(pvt.dot(W_opt))
+#     print(t, np.mean(Static), np.std(Static))
+
+
+# %%
+# for t in range(T+1):
+#     Static = []
+#     for i in Stock[t]:
+#         pvt = pv(i, T-t)
+#         Static.append(pvt.dot(W_reg))
+#     print(t, np.mean(Static), np.std(Static))
+
+# %% [markdown]
+# ## Static hedging by call options
+
+# %%
+def portfolio_call(S, G, t, r, sigma, m, me, lamb, mu, nu, A, Pi, N, X):
+    matrix = np.zeros((7, 8))
+    # GMMB(10) = Put(10 + Put(11) + Put(12) + f(10 + f(11) + Z(10) + Z(11)
+    matrix[0, 0] = rsmjd_gmmb_fst(S, G, t, r, sigma, m, me, lamb, mu, nu, A, Pi, N, X)
+    matrix[1, 0] = rsmjd_gmmbdelta_fst(S, G, t, r, sigma, m, me, lamb, mu, nu, A, Pi, N, X)
+    matrix[2, 0] = rsmjd_gmmbgamma_fst(S, G, t, r, sigma, m, me, lamb, mu, nu, A, Pi, N, X)
+    matrix[3, 0] = rsmjd_gmmbrho_fst(S, G, t, r, sigma, m, me, lamb, mu, nu, A, Pi, N, X)[0]
+    matrix[4, 0] = rsmjd_gmmbvega_fst(S, G, t, r, sigma, m, me, lamb, mu, nu, A, Pi, N, X)[0]
+    matrix[5, 0] = rsmjd_gmmbmort_fst(S, G, t, r, sigma, m, me, lamb, mu, nu, A, Pi, N, X)[0]
+    matrix[6, 0] = rsmjd_gmmbmort_fst(S, G, t, r, sigma, m, me, lamb, mu, nu, A, Pi, N, X)[1]
+    for j in range(3): # Put(10), Put(11), Put(12)
+        matrix[0, j+1] = rsmjd_call_fst(S, G, t+j, r, sigma, 0, lamb, mu, nu, A, Pi, N, X)
+        matrix[1, j+1] = rsmjd_calldelta_fst(S, G, t+j, r, sigma, 0, lamb, mu, nu, A, Pi, N, X)
+        matrix[2, j+1] = rsmjd_callgamma_fst(S, G, t+j, r, sigma, 0, lamb, mu, nu, A, Pi, N, X)
+        matrix[3, j+1] = rsmjd_callrho_fst(S, G, t+j, r, sigma, 0, lamb, mu, nu, A, Pi, N, X)[0]
+        matrix[4, j+1] = rsmjd_callvega_fst(S, G, t+j, r, sigma, 0, lamb, mu, nu, A, Pi, N, X)[0]
+    for j in range(2): # f(10), f(11), Z(10), Z(11)
+        matrix[0, j+4] = s(10+j) * z(r, t+j, A, Pi) # Price
+        matrix[3, j+4] = s(10+j) * rho1_z(r, t+j, A, Pi) # Rho1
+        matrix[5, j+4] = b(10+j) * s(10+j) * z(r, t+j, A, Pi) # Mu
+        matrix[6, j+4] = b(10+j) ** 2 * s(10+j) * z(r, t+j, A, Pi) # Mu2
+        matrix[0, j+6] = z(r, t+j, A, Pi) # Price
+        matrix[3, j+6] = rho1_z(r, t+j, A, Pi) # Rho1
+    weights = np.zeros((8))
+    weights[0] = -1
+    weights[1:] = lin.solve(matrix[:, 1:], matrix[:, 0])
+    return (matrix, weights)
+Results = portfolio_call(S0, G, T, r, sigma, m, me, lamb, mu, nu, A, Pi, N, X)
+print(Results)
+Matrix0 = Results[0]
+W_0 = Results[1]
+
+
+# %%
+def pv(S, t): # Present Value
+    vector = np.zeros(8)
+    vector[0] = rsmjd_gmmb_fst(S, G, t, r, sigma, m, me, lamb, mu, nu, A, Pi, N, X)
+    for j in range(3): # Put(10), Put(11), Put(12)
+        vector[j+1] = rsmjd_call_fst(S, G, t+j, r, sigma, 0, lamb, mu, nu, A, Pi, N, X)
+    for j in range(2): # f(15), f(16), Z(15), Z(16)
+        vector[j+4] = s(10+j) * z(r, t+j, A, Pi)
+        vector[j+6] = z(r, t+j, A, Pi)
+    return vector
+
+
+# %%
+def opt_weights(p):
+    w1, w2, w3, w4, w5, w6, w7 = p
+    matrix = Matrix0
+    weights = np.array([w1, w2, w3, w4, w5, w6, w7])
+    Bx = matrix[:, 1:].dot(weights)
+    C = matrix[:, 0]
+    return np.sum((Bx - C) ** 2)
+bnds = ((-1000, 1000), (-1000, 1000), (-1000, 1000), (-1000, 1000), (-1000, 1000), (-1000, 1000), (-1000, 1000)) 
+sco.minimize(opt_weights, [0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1], method='SLSQP', bounds=bnds)
+
+
+# %%
+def reg_weights(p):
+    w1, w2, w3, w4, w5, w6, w7 = p
+    matrix = Matrix0
+    weights = np.array([w1, w2, w3, w4, w5, w6, w7])
+    Bx = matrix[:, 1:].dot(weights)
+    C = matrix[:, 0]
+    return (Bx - C).dot(Bx - C) + 10 * np.sum(np.abs(weights))
+
+bnds = ((-1000, 1000), (-1000, 1000), (-1000, 1000), (-1000, 1000), (-1000, 1000), (-1000, 1000), (-1000, 1000)) 
+sco.minimize(reg_weights, [0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1], method='SLSQP', bounds=bnds)
+
+
+# %%
+W_lin = np.array([-1, -1242.44157, 2689.04261, -1445.77660, -8.38397657, 19.1901548, 7895.91752, -7779.43525])
+W_opt = np.array([-1, 3.99547342, -0.00872234776, -3.97262607, -8.38395938, 19.19016453, 4.52732595, 4.65190691])
+W_reg = np.array([-1, 0, -0.0732288732, -0.153534904, -4.02971641, 15.7848519, 0, 0])
 
 
 # %%
