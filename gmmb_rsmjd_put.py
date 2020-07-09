@@ -104,73 +104,6 @@ print('s(10) = %.16f' % s(15)) # 0.8672053048004046
 
 
 # %%
-# def rsmjd_gmmb_mc(S0, G, T, r, sigma, m, me, lamb, mu, nu, A, Pi, M, I):
-#     r1, r2 = r[0], r[1]
-#     sigma1, sigma2 = sigma[0], sigma[1]
-#     l1, l2 = A[0, 1], A[1, 0]
-#     mu1, mu2 = mu[0], mu[1]
-#     nu1, nu2 = nu[0], nu[1]
-#     lamb1, lamb2 = lamb[0], lamb[1]
-#     drift1 = r1 - m - lamb1 * (np.exp(mu1 + 0.5 * nu1 ** 2) - 1) - 0.5 * sigma1 ** 2
-#     drift2 = r2 - m - lamb2 * (np.exp(mu2 + 0.5 * nu2 ** 2) - 1) - 0.5 * sigma2 ** 2  
-#     if Pi[0] > Pi[1]:
-#         Ini_State = 1.0
-#     else:
-#         Ini_State = 2.0
-#     F = np.zeros((T + 1, I))
-#     F[0] = S0
-#     cf = np.zeros((T + 1, I)) 
-#     for t in range(T + 1):
-#         for i in range(I):
-#             LogStock = float(np.log(S0))
-#             Cur_Time = 0.0
-#             Cur_State = Ini_State
-#             tau1 = 0.0
-#             while Cur_Time < t:
-#                 p = npr.uniform(0, 1)
-#                 if Cur_State == 1:
-#                     ExpRV = -1 * np.log(p) / l1
-#                 else:
-#                     ExpRV = -1 * np.log(p) / l2
-#                 if Cur_Time + ExpRV < t and Cur_State == 1:
-#                     tau1 = tau1 + ExpRV
-#                 else:
-#                     if Cur_State == 1:
-#                         tau1 = tau1 + t - Cur_Time
-#                 Cur_Time = Cur_Time + ExpRV
-#                 if Cur_State == 1:
-#                     Cur_State = 2
-#                 else:
-#                     Cur_State = 1
-#             J1 = 0
-#             Nt1 = npr.poisson(lamb1 * tau1)
-#             if Nt1 > 0:
-#                 for j1 in range(Nt1):
-#                     J1 = J1 + npr.normal(mu1, nu1)
-#             J2 = 0
-#             Nt2 = npr.poisson(lamb2 * (t - tau1))
-#             if Nt2 > 0:
-#                 for j2 in range(Nt2):
-#                     J2 = J2 + npr.normal(mu2, nu2)
-#             SimRand = float(npr.standard_normal())
-#             LogFund = LogStock + drift1 * tau1 + drift2 * (t - tau1) + SimRand * np.sqrt(tau1 * sigma1 ** 2 + (t - tau1) * sigma2 ** 2) + J1 + J2
-#             F[t, i] = np.exp(LogFund)
-#             if t < T:
-#                 cf[t, i] = np.exp(-1 * (r1 * tau1 + r2 * (t - tau1))) * np.exp(LogFund) * me * s(t)
-#             else:
-#                 cf[t, i] = np.exp(-1 * (r1 * tau1 + r2 * (t - tau1))) * np.maximum(0, G - np.exp(LogFund))
-#     Gmmb = np.mean(s(T) * cf[-1] - np.sum(cf[:-1], 0))
-#     return (np.mean(cf[-1]), Gmmb)
-
-# start = time.clock()
-# Results = rsmjd_gmmb_mc(S0, G, T, r, sigma, m, me, lamb, mu, nu, A, Pi, M, I)
-# print('Put_MC = %.16f' % Results[0]) # 15.8974221895861056
-# print('GMMB_MC = %.16f' % Results[1]) # 0.0358920927391137
-# elapsed = (time.clock() - start)
-# print("Time used:", elapsed)
-
-
-# %%
 def rsmjd_put_fst(S0, G, T, r, sigma, m, lamb, mu, nu, A, Pi, N, X):
     # parameter
     r1, r2 = r[0], r[1]
@@ -264,46 +197,6 @@ print('GMMB_FST = %.16f' % rsmjd_gmmb_fst(S0, G, T, r, sigma, m, me, lamb, mu, n
 elapsed = (time.clock() - start)
 print("Time used:", elapsed)
 
-# %% [markdown]
-# ## 3D plot
-
-# %%
-# from mpl_toolkits.mplot3d import Axes3D
-# fig = plt.figure()
-# ax = Axes3D(fig)
-
-# interest1 = np.linspace(0, 0.2, num=7)
-# vol1 = np.linspace(0, 0.3, num=7)
-# interest1, vol1 = np.meshgrid(interest1, vol1)
-# v = np.zeros_like(interest1)
-
-# for i in range(7): 
-#     for j in range(7):
-#         interest = [interest1[i, j], r[1]]
-#         vol = [vol1[i, j], sigma[1]]
-#         v[i, j] = rsmjd_gmmb_fst(S0, G, T, interest, vol, m, me, lamb, mu, nu, A, Pi, N, X)
-
-# surf = ax.plot_surface(interest1, vol1, v, cmap=plt.cm.coolwarm)
-# ax.set_xlabel('Interest')
-# ax.set_ylabel('Volatility')
-# ax.set_zlabel('GMMB Loss') 
-# plt.show()
-
-# %% [markdown]
-# ## Fair rates
-
-# %%
-# # Fair Rates (m, me)
-# me = np.linspace(0.0001, 0.02)
-# loss = []
-# for i in me:
-#     temp = rsmjd_gmmb_fst(S0, G, T, r, sigma, m, i, lamb, mu, nu, A, Pi, N, X)
-#     loss.append(temp)
-# plt.plot(me, loss)
-# plt.grid()
-# f = interpolate.PchipInterpolator(loss[::-1], me[::-1])
-# me = f(0) # fair rate of me
-# float(me) # 0.01651366493609785
 
 # %% [markdown]
 # ## Delta
@@ -1317,7 +1210,7 @@ def rsmjd_gmmb_simulation(S0, G, T, r, sigma, m, lamb, mu, nu, A, Pi, I):
             F[t, i] = np.exp(LogFund)
     return F
 
-Stock = rsmjd_gmmb_simulation(S0, G, T, drift, sigma, 0, lamb, mu, nu, A, Pi, Path)
+Stock = rsmjd_gmmb_simulation(S0, G, T, r, sigma, 0, lamb, mu, nu, A, Pi, Path)
 Stock.shape
 
 
@@ -1335,6 +1228,11 @@ for j in range(T+1):
         temp = rsmjd_gmmb_fst(i, G, T-j, r, sigma, m, me, lamb, mu, nu, A, Pi, N, X)
         Unhedged.append(temp)
     print(j, np.mean(Unhedged), np.std(Unhedged))
+    if j == T:
+        aa = np.percentile(Unhedged, 5)
+        print('VaR_unhedged=', aa)
+        bb = [cc for cc in Unhedged if cc < aa]
+        print('CVaR_unhedged=', np.mean(bb))
 
 # %% [markdown]
 # ## Static hedging
@@ -1423,7 +1321,11 @@ for t in range(T+1):
         pvt = pv(i, T-t)
         Static.append(pvt.dot(W_lin))
     print(t, np.mean(Static), np.std(Static))
-
+    if t == T:
+        aa = np.percentile(Static, 5)
+        print('VaR_lin=', aa)
+        bb = [cc for cc in Static if cc < aa]
+        print('CVaR_lin=', np.mean(bb))
 
 # %%
 for t in range(T+1):
@@ -1432,7 +1334,11 @@ for t in range(T+1):
         pvt = pv(i, T-t)
         Static.append(pvt.dot(W_opt))
     print(t, np.mean(Static), np.std(Static))
-
+    if t == T:
+        aa = np.percentile(Static, 5)
+        print('VaR_opt=', aa)
+        bb = [cc for cc in Static if cc < aa]
+        print('CVaR_opt=', np.mean(bb))
 
 # %%
 for t in range(T+1):
@@ -1441,4 +1347,8 @@ for t in range(T+1):
         pvt = pv(i, T-t)
         Static.append(pvt.dot(W_reg))
     print(t, np.mean(Static), np.std(Static))
-
+    if t == T:
+        aa = np.percentile(Static, 5)
+        print('VaR_reg=', aa)
+        bb = [cc for cc in Static if cc < aa]
+        print('CVaR_reg=', np.mean(bb))
